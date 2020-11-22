@@ -1,11 +1,7 @@
 package com.amazonaws.samples;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Scanner;
-
 import com.amazonaws.AmazonClientException;
-
 import com.amazonaws.SdkClientException;
 import com.amazonaws.auth.profile.ProfileCredentialsProvider;
 import com.amazonaws.services.ec2.AmazonEC2;
@@ -40,7 +36,10 @@ import com.amazonaws.services.ec2.model.RunInstancesResult;
 import com.amazonaws.services.ec2.model.StartInstancesRequest;
 import com.amazonaws.services.ec2.model.StopInstancesRequest;
 import com.amazonaws.services.ec2.model.DescribeRegionsResult;
-
+import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
+import com.amazonaws.services.ec2.model.TerminateInstancesResult;
+import com.amazonaws.services.ec2.model.CreateKeyPairRequest;
+import com.amazonaws.services.ec2.model.CreateKeyPairResult;
 
 public class Awsinstance
 {
@@ -54,7 +53,6 @@ public class Awsinstance
 		
 		private static void init() throws Exception
 		{
-		
 			/*
 			* The ProfileCredentialsProvider will return your [default]
 			* credential profile by reading from the credentials file located at
@@ -75,7 +73,7 @@ public class Awsinstance
 			}
 			ec2 = AmazonEC2ClientBuilder.standard()
 					.withCredentials(credentialsProvider)
-					.withRegion("us-east-1") /* check the region at AWS console */
+					.withRegion("us-east-1") /* 예제코드에선 2번이었지만 1로 수정 */
 					.build();
 		}
 
@@ -86,6 +84,7 @@ public class Awsinstance
 		Scanner id_string = new Scanner(System.in);
 		int number = 0;
 		String name;
+		String name2;
 		while(true)
 		{
 			System.out.println(" ");
@@ -100,7 +99,7 @@ public class Awsinstance
 			System.out.println(" 3. start instance  |  4. available regions ");
 			System.out.println(" 5. stop instance   |  6. create instance ");
 			System.out.println(" 7. reboot instance |  8. list images ");
-			System.out.println(" 9. delete instance |  10. find running ");  // s내가 추가 구현하려는 부분
+			System.out.println(" 9. delete instance |  10. find running ");  //내가 추가 구현하려는 부분
 			System.out.println(" 99. quit ");
 			System.out.println("------------------------------------------------------------");
 			
@@ -129,9 +128,11 @@ public class Awsinstance
 					StopInstance(name);
 					break;
 				case 6:
-					System.out.print("Enter AMi id : ");
+					System.out.print("Enter Instance name : ");
 					name = id_string.nextLine();
-					CreateInstance(name);
+					System.out.print("Enter AMi id : ");
+					name2 = id_string.nextLine();
+					CreateInstance(name, name2);
 					break;
 				case 7:
 					System.out.print("Enter instance id : ");
@@ -142,15 +143,19 @@ public class Awsinstance
 					ListImages();
 					break;
 				case 9:
-					findrunning();
+					System.out.print("Enter instance id : ");
+					name = id_string.nextLine();
+					deleteinstance(name);
 					break;
 				case 10:
-					deleteinstance();
+					findrunning();
 					break;
 				case 99:
 					System.out.println("The program has been terminated successfully!");
 					System.exit(0);
-					break;
+					menu.close();
+					id_string.close();
+					break;	
 			}	
 		}
 	}
@@ -255,77 +260,41 @@ public class Awsinstance
 	}
 //완료 *
 	
-	public static void CreateInstance(String ami_id)
+	public static void CreateInstance(String instance_name, String ami_id)
 	{
-		//final AmazonEC2 ec2 = AmazonEC2ClientBuilder.defaultClient();
+		 final AmazonEC2 ec2 = AmazonEC2ClientBuilder.defaultClient();
 
-        RunInstancesRequest run_request = new RunInstancesRequest()
-            .withImageId(ami_id)
-            .withInstanceType(InstanceType.T2Micro)
-            .withMaxCount(1)
-            .withMinCount(1);
+	        RunInstancesRequest run_request = new RunInstancesRequest()
+	            .withImageId(ami_id)
+	            .withInstanceType(InstanceType.T2Micro)
+	            .withMaxCount(1)
+	            .withMinCount(1);
 
-        RunInstancesResult run_response = ec2.runInstances(run_request);
-        String reservation_id = run_response.getReservation().getInstances().get(0).getInstanceId();
+	        RunInstancesResult run_response = ec2.runInstances(run_request);
 
-       // Tag tag = new Tag().withKey("Name").withValue(name);
-       //com.amazonaws.services.ec2.model.CreateTagsRequest tag_request = new CreateTagsRequest().withResources(reservation_id).withTags(tag);
-       //com.amazonaws.services.ec2.model.CreateTagsResult tag_response = ec2.createTags(tag_request);
+	        String reservation_id = run_response.getReservation().getInstances().get(0).getInstanceId();
 
-        System.out.printf(
-           "Successfully started EC2 instance %s based on AMI %s",
-           reservation_id, ami_id);
+	        Tag tag = new Tag().withKey("Name").withValue(instance_name);
+
+	        CreateTagsRequest tag_request = new CreateTagsRequest().withResources(reservation_id).withTags(tag);
+	        ec2.createTags(tag_request);
+	        System.out.printf("Successfully started EC2 instance %s based on AMI %s",reservation_id, ami_id);
 	}
-// 만들어는 지는데 ssh키가 안뜸 ㅎㄷㄷ...
+//완료 *
 	
 	public static void RebootInstance(String instance_id)
 	{
-		//String name = instance_id;
-
         final AmazonEC2 ec2 = AmazonEC2ClientBuilder.defaultClient();
 
         RebootInstancesRequest request = new RebootInstancesRequest()
             .withInstanceIds(instance_id);
 
-        RebootInstancesResult response = ec2.rebootInstances(request);
+       ec2.rebootInstances(request);
 
         System.out.printf(
             "Successfully rebooted instance %s", instance_id);	
 	}
-//완료 (이긴한데 스탑되어있는 인스턴스를 실행시킬때 이상...하다?)
-	
-	/*
-	 * public static List<String> GetInstanceId()
-	{
-		
-		ArrayList<String> arr = new ArrayList<String>();
-		boolean done = false;
-		
-		DescribeInstancesRequest request = new DescribeInstancesRequest();
-		
-		while(!done)
-		{
-			com.amazonaws.services.ec2.model.DescribeInstancesResult response = ec2.describeInstances(request);
-				for(Reservation reservation : response.getReservations())
-				{
-					for(com.amazonaws.services.ec2.model.Instance instance : reservation.getInstances())
-					{
-						arr.add(instance.getInstanceId());
-					}
-				}
-				
-				request.setNextToken(response.getNextToken());
-	
-			if(response.getNextToken() == null)
-			{
-				done = true;
-			}
-		}
-		return arr;	
-	}
-// 이거 검증필요
-	 * */
-//여차하면 지우기
+//완료 (이긴한데 스탑되어있는 인스턴스를 리부트시킬때 이상...하다? AWS에서 exception 뜨는 걸 보니 정책적으로 안되는듯? 함)
 	
 	public static void ListImages()
 	{
@@ -347,31 +316,29 @@ public class Awsinstance
 			}
 				System.out.println();
 	}
-//완료*
-	
+//완료 *
+
+/*
+ *  추가기능: 현재 가용 가능한(in running) 가상머신만 출력하는 기능 추가 11/22
+ */	
 	public static void findrunning()
 	{
 		 AmazonEC2 ec2 = AmazonEC2ClientBuilder.defaultClient();
 		 System.out.println("Finding Running instances....");
 	        try
 	        {
-	            //Create the Filter to use to find running instances
 	            Filter filter = new Filter("instance-state-name");
 	            filter.withValues("running");
 
-	            //Create a DescribeInstancesRequest
 	            DescribeInstancesRequest request = new DescribeInstancesRequest();
 	            request.withFilters(filter);
 
-	            // Find the running instances
 	            DescribeInstancesResult response = ec2.describeInstances(request);
 
 	            for (Reservation reservation : response.getReservations())
 	            {
 	                for (Instance instance : reservation.getInstances())
 	                {
-
-	                    //Print out the results
 	                    System.out.printf(
 	                    				"[id] %s, " +
 	                            		"[AMI] %s, " +
@@ -394,9 +361,21 @@ public class Awsinstance
 	}
 //완료 *	
 	
-	public static void deleteinstance()
+/*
+ *  추가기능: 인스턴스 stop이 아닌 terminate기능 추가 11/22
+ */
+	public static void deleteinstance(String instance_id)
 	{
+		final AmazonEC2 ec2 = AmazonEC2ClientBuilder.defaultClient();
+		
+		TerminateInstancesRequest request = new TerminateInstancesRequest().withInstanceIds(instance_id);
+		ec2.terminateInstances(request);
 		 
+		System.out.printf("Successfully terminated instance %s", instance_id);	
 	}
+//완료 *
+	
 }
+
+
 
